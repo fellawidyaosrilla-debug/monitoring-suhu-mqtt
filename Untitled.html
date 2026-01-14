@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitoring Realtime - Firebase</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+    <style>
+        .alert-flash { animation: pulse 1s infinite; }
+        @keyframes pulse {
+            0% { background-color: #ffffff; }
+            50% { background-color: #fee2e2; }
+            100% { background-color: #ffffff; }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans">
+    <div class="container mx-auto p-6">
+        <header class="mb-8 flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-800">Dashboard Realtime</h1>
+                <p class="text-gray-500">Status: <span id="db-status" class="text-orange-500 font-bold">Menghubungkan ke Firebase...</span></p>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div id="temp-card" class="bg-white p-6 rounded-2xl shadow-sm border-b-4 border-orange-500 transition-all duration-500">
+                <p class="text-gray-400 font-semibold uppercase text-sm">Temperatur</p>
+                <div class="flex items-center mt-2">
+                    <span id="temp-val" class="text-5xl font-bold text-orange-500">00.0</span>
+                    <span class="text-2xl text-gray-400 ml-2">°C</span>
+                </div>
+                <div id="alert-container"></div>
+            </div>
+
+            <div class="bg-white p-6 rounded-2xl shadow-sm border-b-4 border-blue-500">
+                <p class="text-gray-400 font-semibold uppercase text-sm">Kelembapan</p>
+                <div class="flex items-center mt-2">
+                    <span id="hum-val" class="text-5xl font-bold text-blue-500">00.0</span>
+                    <span class="text-2xl text-gray-400 ml-2">%</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="bg-white p-4 rounded-2xl shadow-sm">
+                <canvas id="tempChart"></canvas>
+            </div>
+            <div class="bg-white p-4 rounded-2xl shadow-sm">
+                <canvas id="humChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- KONFIGURASI FIREBASE ANDA ---
+        const firebaseConfig = {
+            databaseURL: "https://project-pkl-a65b2-default-rtdb.firebaseio.com/"
+        };
+
+        // Inisialisasi Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        // Inisialisasi Chart
+        const ctxTemp = document.getElementById('tempChart').getContext('2d');
+        const ctxHum = document.getElementById('humChart').getContext('2d');
+
+        const chartConfig = (label, color) => ({
+            type: 'line',
+            data: { labels: [], datasets: [{ label: label, data: [], borderColor: color, tension: 0.4 }] }
+        });
+
+        const tempChart = new Chart(ctxTemp, chartConfig('Suhu (°C)', '#f97316'));
+        const humChart = new Chart(ctxHum, chartConfig('Kelembapan (%)', '#3b82f6'));
+
+        // --- MENGAMBIL DATA DARI FIREBASE ---
+        // Asumsi path di Firebase Anda adalah "monitoring" (sesuaikan dengan ESP32)
+        database.ref('monitoring').on('value', (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                document.getElementById("db-status").innerText = "Tersambung";
+                document.getElementById("db-status").className = "text-green-500 font-bold";
+                
+                const suhu = parseFloat(data.suhu);
+                const kelembapan = parseFloat(data.kelembapan);
+
+                updateUI(suhu, kelembapan);
+            }
+        });
+
+        function updateUI(suhu, kelembapan) {
+            document.getElementById("temp-val").innerText = suhu.toFixed(1);
+            document.getElementById("hum-val").innerText = kelembapan.toFixed(1);
+
+            const card = document.getElementById("temp-card");
+            const alertBox = document.getElementById("alert-container");
+
+            // Peringatan 27 Derajat
+            if (suhu > 27) {
+                card.classList.add("alert-flash");
+                card.classList.replace("border-orange-500", "border-red-600");
+                alertBox.innerHTML = `<p class="text-red-600 font-bold mt-2 animate-bounce">⚠️ BAHAYA: SUHU > 27°C!</p>`;
+            } else {
+                card.classList.remove("alert-flash");
+                card.classList.replace("border-red-600", "border-orange-500");
+                alertBox.innerHTML = "";
+            }
+
+            // Update Grafik
+            const time = new Date().toLocaleTimeString();
+            [tempChart, humChart].forEach((chart, i) => {
+                chart.data.labels.push(time);
+                chart.data.datasets[0].data.push(i === 0 ? suhu : kelembapan);
+                if (chart.data.labels.length > 10) {
+                    chart.data.labels.shift();
+                    chart.data.datasets[0].data.shift();
+                }
+                chart.update();
+            });
+        }
+    </script>
+</body>
+</html>
