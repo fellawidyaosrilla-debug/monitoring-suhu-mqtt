@@ -16,80 +16,94 @@
             50% { background-color: #fee2e2; }
             100% { background-color: #ffffff; }
         }
+        /* Menjaga aspek rasio chart agar tidak terlalu tinggi di mobile */
+        .chart-container {
+            position: relative;
+            height: 40vh; /* Menggunakan viewport height */
+            width: 100%;
+        }
     </style>
 </head>
-<body class="bg-gray-100 font-sans">
-    <div class="container mx-auto p-6">
-        <header class="mb-8 flex justify-between items-center">
+<body class="bg-gray-100 font-sans leading-normal tracking-normal">
+    <div class="container mx-auto p-4 md:p-10">
+        
+        <header class="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
-                <h1 class="text-3xl font-bold text-gray-800">Dashboard Realtime</h1>
-                <p class="text-gray-500">Status: <span id="db-status" class="text-orange-500 font-bold">Menghubungkan ke Firebase...</span></p>
+                <h1 class="text-2xl md:text-3xl font-bold text-gray-800">Dashboard Realtime</h1>
+                <p class="text-gray-500 text-sm md:text-base">Status: <span id="db-status" class="text-orange-500 font-bold">Menghubungkan...</span></p>
+            </div>
+            <div class="bg-white px-4 py-2 rounded-lg shadow-sm text-xs md:text-sm text-gray-500 border border-gray-200">
+                Update terakhir: <span id="last-update">-</span>
             </div>
         </header>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 mb-8">
             <div id="temp-card" class="bg-white p-6 rounded-2xl shadow-sm border-b-4 border-orange-500 transition-all duration-500">
-                <p class="text-gray-400 font-semibold uppercase text-sm">Temperatur</p>
-                <div class="flex items-center mt-2">
-                    <span id="temp-val" class="text-5xl font-bold text-orange-500">00.0</span>
-                    <span class="text-2xl text-gray-400 ml-2">°C</span>
+                <p class="text-gray-400 font-semibold uppercase text-xs tracking-wider">Temperatur</p>
+                <div class="flex items-baseline mt-2">
+                    <span id="temp-val" class="text-4xl md:text-5xl font-bold text-orange-500">00.0</span>
+                    <span class="text-xl text-gray-400 ml-2">°C</span>
                 </div>
                 <div id="alert-container"></div>
             </div>
 
             <div class="bg-white p-6 rounded-2xl shadow-sm border-b-4 border-blue-500">
-                <p class="text-gray-400 font-semibold uppercase text-sm">Kelembapan</p>
-                <div class="flex items-center mt-2">
-                    <span id="hum-val" class="text-5xl font-bold text-blue-500">00.0</span>
-                    <span class="text-2xl text-gray-400 ml-2">%</span>
+                <p class="text-gray-400 font-semibold uppercase text-xs tracking-wider">Kelembapan</p>
+                <div class="flex items-baseline mt-2">
+                    <span id="hum-val" class="text-4xl md:text-5xl font-bold text-blue-500">00.0</span>
+                    <span class="text-xl text-gray-400 ml-2">%</span>
                 </div>
             </div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div class="bg-white p-4 rounded-2xl shadow-sm">
-                <canvas id="tempChart"></canvas>
+                <h3 class="text-gray-600 font-bold mb-4 text-center">Tren Suhu</h3>
+                <div class="chart-container">
+                    <canvas id="tempChart"></canvas>
+                </div>
             </div>
             <div class="bg-white p-4 rounded-2xl shadow-sm">
-                <canvas id="humChart"></canvas>
+                <h3 class="text-gray-600 font-bold mb-4 text-center">Tren Kelembapan</h3>
+                <div class="chart-container">
+                    <canvas id="humChart"></canvas>
+                </div>
             </div>
         </div>
     </div>
 
     <script>
-        // --- KONFIGURASI FIREBASE ANDA ---
         const firebaseConfig = {
             databaseURL: "https://project-pkl-a65b2-default-rtdb.firebaseio.com/"
         };
 
-        // Inisialisasi Firebase
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
 
-        // Inisialisasi Chart
-        const ctxTemp = document.getElementById('tempChart').getContext('2d');
-        const ctxHum = document.getElementById('humChart').getContext('2d');
-
+        // Konfigurasi Chart dengan maintainAspectRatio: false agar responsif terhadap container
         const chartConfig = (label, color) => ({
             type: 'line',
-            data: { labels: [], datasets: [{ label: label, data: [], borderColor: color, tension: 0.4 }] }
+            data: { labels: [], datasets: [{ label: label, data: [], borderColor: color, backgroundColor: color + '22', fill: true, tension: 0.4 }] },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: false } }
+            }
         });
 
-        const tempChart = new Chart(ctxTemp, chartConfig('Suhu (°C)', '#f97316'));
-        const humChart = new Chart(ctxHum, chartConfig('Kelembapan (%)', '#3b82f6'));
+        const tempChart = new Chart(document.getElementById('tempChart'), chartConfig('Suhu (°C)', '#f97316'));
+        const humChart = new Chart(document.getElementById('humChart'), chartConfig('Kelembapan (%)', '#3b82f6'));
 
-        // --- MENGAMBIL DATA DARI FIREBASE ---
-        // Asumsi path di Firebase Anda adalah "monitoring" (sesuaikan dengan ESP32)
         database.ref('monitoring').on('value', (snapshot) => {
             const data = snapshot.val();
             if (data) {
                 document.getElementById("db-status").innerText = "Tersambung";
-                document.getElementById("db-status").className = "text-green-500 font-bold";
+                document.getElementById("db-status").className = "text-green-500 font-bold text-sm md:text-base";
+                document.getElementById("last-update").innerText = new Date().toLocaleTimeString();
                 
-                const suhu = parseFloat(data.suhu);
-                const kelembapan = parseFloat(data.kelembapan);
-
-                updateUI(suhu, kelembapan);
+                // Pastikan nama key di Firebase (suhu/kelembapan) cocok dengan yang dikirim ESP32
+                updateUI(parseFloat(data.suhu || 0), parseFloat(data.kelembapan || 0));
             }
         });
 
@@ -100,23 +114,21 @@
             const card = document.getElementById("temp-card");
             const alertBox = document.getElementById("alert-container");
 
-            // Peringatan 27 Derajat
             if (suhu > 27) {
                 card.classList.add("alert-flash");
                 card.classList.replace("border-orange-500", "border-red-600");
-                alertBox.innerHTML = `<p class="text-red-600 font-bold mt-2 animate-bounce">⚠️ BAHAYA: SUHU > 27°C!</p>`;
+                alertBox.innerHTML = `<p class="text-red-600 font-bold mt-2 text-sm animate-bounce text-center md:text-left">⚠️ BAHAYA: SUHU > 27°C!</p>`;
             } else {
                 card.classList.remove("alert-flash");
                 card.classList.replace("border-red-600", "border-orange-500");
                 alertBox.innerHTML = "";
             }
 
-            // Update Grafik
-            const time = new Date().toLocaleTimeString();
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             [tempChart, humChart].forEach((chart, i) => {
                 chart.data.labels.push(time);
                 chart.data.datasets[0].data.push(i === 0 ? suhu : kelembapan);
-                if (chart.data.labels.length > 10) {
+                if (chart.data.labels.length > 8) {
                     chart.data.labels.shift();
                     chart.data.datasets[0].data.shift();
                 }
