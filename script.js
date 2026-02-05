@@ -1,101 +1,148 @@
-// 1. KONFIGURASI FIREBASE (PROYEK: suhu-dan-kelembapan-pkl)
+
 const firebaseConfig = {
-  apiKey: "AIzaSyC3dZ45fPaR8v8kyP8W_UpjmzG2q33Fzjc",
-  authDomain: "suhu-dan-kelembapan-pkl.firebaseapp.com",
-  databaseURL: "https://suhu-dan-kelembapan-pkl-default-rtdb.firebaseio.com/",
-  projectId: "suhu-dan-kelembapan-pkl",
-  storageBucket: "suhu-dan-kelembapan-pkl.appspot.com",
-  messagingSenderId: "331872164478",
-  appId: "1:331872164478:web:7587c6778f5a621160a005"
+    apiKey: "AIzaSyD01zcVYGHyVKCvJ1Yo196v03yMg1nJZ_k",
+    authDomain: "final-projek-31c96.firebaseapp.com",
+    databaseURL: "https://final-projek-31c96-default-rtdb.firebaseio.com",
+    projectId: "final-projek-31c96",
+    storageBucket: "final-projek-31c96.firebasestorage.app",
+    messagingSenderId: "849386430505",
+    appId: "1:849386430505:web:b49beee8a331d147443c38",
+    measurementId: "G-EFKC882WNS"
 };
 
-// 2. INISIALISASI
+
 firebase.initializeApp(firebaseConfig);
 const database = firebase.database();
-const alarm = document.getElementById('alarm-sound');
 
-// 3. INISIALISASI GRAFIK
+
 const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
-    scales: { y: { beginAtZero: false } },
-    elements: { line: { tension: 0.4 }, point: { radius: 2 } }
+    plugins: { legend: { display: false } },
+    scales: { 
+        y: { 
+            beginAtZero: false,
+            grid: { color: 'rgba(0, 0, 0, 0.05)' }
+        },
+        x: { grid: { display: false } }
+    },
+    elements: { 
+        line: { tension: 0.4, borderWidth: 3 },
+        point: { radius: 2 }
+    }
 };
+
 
 const tempCtx = document.getElementById('tempChart').getContext('2d');
 const tempChart = new Chart(tempCtx, {
     type: 'line',
-    data: { labels: [], datasets: [{ label: 'Suhu (°C)', data: [], borderColor: '#f97316', backgroundColor: 'rgba(249, 115, 22, 0.1)', fill: true }] },
+    data: {
+        labels: [],
+        datasets: [{
+            label: 'Suhu (°C)',
+            data: [],
+            borderColor: '#f97316',
+            backgroundColor: 'rgba(249, 115, 22, 0.1)',
+            fill: true
+        }]
+    },
     options: chartOptions
 });
+
 
 const humCtx = document.getElementById('humChart').getContext('2d');
 const humChart = new Chart(humCtx, {
     type: 'line',
-    data: { labels: [], datasets: [{ label: 'Kelembapan (%)', data: [], borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', fill: true }] },
+    data: {
+        labels: [],
+        datasets: [{
+            label: 'Kelembapan (%)',
+            data: [],
+            borderColor: '#3b82f6',
+            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+            fill: true
+        }]
+    },
     options: chartOptions
 });
 
-// 4. LOGIKA DATA REAL-TIME
-let maxTempToday = 0;
-const dbRef = database.ref('/monitoring');
 
-dbRef.on('value', (snapshot) => {
+let maxTemp = 0;
+const alarmSound = document.getElementById('alarm-sound');
+let isAlarmPlaying = false;
+
+database.ref('/').on('value', (snapshot) => {
     const data = snapshot.val();
+    
     if (data) {
-        const t = parseFloat(data.suhu).toFixed(1);
-        const h = parseFloat(data.kelembapan).toFixed(1);
-        const timeNow = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+        
+        const s = parseFloat(data.suhu) || 0;
+        const k = parseFloat(data.kelembapan) || 0;
 
-        // Update Angka di UI
-        document.getElementById('temp-val').innerText = t;
-        document.getElementById('hum-val').innerText = h;
-        document.getElementById('last-update').innerText = timeNow;
+        
+        document.getElementById('temp-val').innerText = s.toFixed(1);
+        document.getElementById('hum-val').innerText = k.toFixed(1);
 
-        // Update Status & Animasi
-        document.getElementById('db-status').innerText = "Online - Stabil";
+        // Update Status Koneksi (Hijau = Online)
+        document.getElementById('db-status').innerText = "Online";
+        document.getElementById('db-status').className = "font-semibold text-green-500";
         document.getElementById('status-dot').className = "relative inline-flex rounded-full h-3 w-3 bg-green-500";
         document.getElementById('ping-animate').className = "animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75";
 
-        // Update Puncak Suhu
-        if (t > maxTempToday) {
-            maxTempToday = t;
-            document.getElementById('max-temp').innerText = maxTempToday;
+        if (s > maxTemp) {
+            maxTemp = s;
+            document.getElementById('max-temp').innerText = maxTemp.toFixed(1);
         }
 
-        // Logika Alarm (Bahaya jika suhu > 35°C)
+       
         const tempCard = document.getElementById('temp-card');
-        const alertBox = document.getElementById('alert-container');
+        const alertContainer = document.getElementById('alert-container');
         
-        if (t > 35) {
+        if (s > 35) {
             tempCard.classList.add('alert-flash');
-            alertBox.innerHTML = `<p class="text-red-600 font-bold animate-bounce">⚠️ PERINGATAN: SUHU OVERHEAT!</p>`;
-            alarm.play().catch(() => console.log("Interaksi user diperlukan untuk suara"));
+            alertContainer.innerHTML = `<p class="text-red-600 font-bold animate-bounce text-sm">⚠️ BAHAYA: SUHU RUANG SERVER KRITIS!</p>`;
+            
+            // Putar Alarm (Hanya jika belum bunyi)
+            if (!isAlarmPlaying) {
+                alarmSound.play().catch(e => console.log("Browser memblokir audio otomatis. Klik di mana saja pada halaman untuk mengaktifkan."));
+                isAlarmPlaying = true;
+            }
         } else {
             tempCard.classList.remove('alert-flash');
-            alertBox.innerHTML = "";
-            alarm.pause();
-            alarm.currentTime = 0;
+            alertContainer.innerHTML = `<p class="text-green-500 font-semibold text-sm italic">✓ Suhu dalam batas aman</p>`;
+            alarmSound.pause();
+            alarmSound.currentTime = 0;
+            isAlarmPlaying = false;
         }
 
-        // Update Grafik (Maksimal 15 data terakhir)
-        [tempChart, humChart].forEach(chart => {
-            if (chart.data.labels.length > 15) {
-                chart.data.labels.shift();
-                chart.data.datasets[0].data.shift();
-            }
-        });
+       
+        const now = new Date();
+        const timeLabel = now.getHours() + ":" + String(now.getMinutes()).padStart(2, '0') + ":" + String(now.getSeconds()).padStart(2, '0');
+        
+        document.getElementById('last-update').innerText = now.getHours() + ":" + String(now.getMinutes()).padStart(2, '0');
 
-        tempChart.data.labels.push(timeNow);
-        tempChart.data.datasets[0].data.push(t);
-        humChart.data.labels.push(timeNow);
-        humChart.data.datasets[0].data.push(h);
+        
+        tempChart.data.labels.push(timeLabel);
+        tempChart.data.datasets[0].data.push(s);
+        
+        
+        humChart.data.labels.push(timeLabel);
+        humChart.data.datasets[0].data.push(k);
+
+        
+        if (tempChart.data.labels.length > 10) {
+            tempChart.data.labels.shift();
+            tempChart.data.datasets[0].data.shift();
+            humChart.data.labels.shift();
+            humChart.data.datasets[0].data.shift();
+        }
 
         tempChart.update();
         humChart.update();
     }
 }, (error) => {
-    document.getElementById('db-status').innerText = "Terputus!";
+  
+    document.getElementById('db-status').innerText = "Offline/Terputus";
+    document.getElementById('db-status').className = "font-semibold text-red-500";
     document.getElementById('status-dot').className = "relative inline-flex rounded-full h-3 w-3 bg-red-500";
-    console.error(error);
 });
